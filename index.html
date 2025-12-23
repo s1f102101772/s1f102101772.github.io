@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blockly ⇔ Python 双方向エディタ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/blockly/10.2.2/blockly.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/blockly/10.2.2/blocks_compressed.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/blockly/10.2.2/python_compressed.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/blockly/10.2.2/msg/ja.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+    <style>
+        :root {
+            --bg-primary: #fafafa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f5f5f5;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --border-light: #e5e5e5;
+            --border-medium: #d4d4d4;
+            --accent-blue: #2563eb;
+            --accent-blue-light: #dbeafe;
+            --accent-green: #16a34a;
+            --accent-green-light: #dcfce7;
+            --accent-red: #dc2626;
+            --accent-red-light: #fef2f2;
+            --code-bg: #1e1e1e;
+            --code-text: #d4d4d4;
+            --code-green: #4ec9b0;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --transition: 0.15s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'IBM Plex Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--text-primary);
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: var(--accent-blue);
+            border-radius: var(--radius-sm);
+        }
+
+        .logo svg {
+            width: 20px;
+            height: 20px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .header-badge {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--accent-blue);
+            background: var(--accent-blue-light);
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .lang-switch {
+            display: flex;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 2px;
+            border: 1px solid var(--border-light);
+        }
+
+        .lang-btn {
+            padding: 6px 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all var(--transition);
+        }
+
+        .lang-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .lang-btn.active {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Main Container */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Panels */
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            min-width: 0;
+        }
+
+        .panel:first-child {
+            border-right: 1px solid var(--border-light);
+        }
+
+        .panel-header {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-secondary);
+        }
+
+        .panel-icon {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+        }
+
+        .panel-icon.blocks {
+            background: #fef3c7;
+        }
+
+        .panel-icon.code {
+            background: var(--accent-blue-light);
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .sync-indicator {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .sync-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--border-medium);
+            transition: background var(--transition);
+        }
+
+        .sync-indicator.active .sync-dot {
+            background: var(--accent-green);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Blockly Area */
+        #blocklyDiv {
+            flex: 1;
+            width: 100%;
+            background: var(--bg-tertiary);
+        }
+
+        /* Code Editor Area */
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .code-wrapper {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+            background: var(--bg-tertiary);
+        }
+
+        .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 48px;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            padding: 16px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 22px;
+            text-align: right;
+            overflow: hidden;
+            user-select: none;
+            border-right: 1px solid var(--border-light);
+            white-space: pre;
+        }
+
+        #codeEditor {
+            flex: 1;
+            padding: 16px 20px 16px 64px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 22px;
+            border: none;
+            outline: none;
+            resize: none;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        #codeEditor::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Toolbar */
+        .toolbar {
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all var(--transition);
+        }
+
+        .btn-primary {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #15803d;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-light);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .status-toast {
+            margin-left: auto;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: all var(--transition);
+        }
+
+        .status-toast.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .status-toast.success {
+            background: var(--accent-green-light);
+            color: var(--accent-green);
+        }
+
+        .status-toast.error {
+            background: var(--accent-red-light);
+            color: var(--accent-red);
+        }
+
+        /* Output Panel */
+        .output-panel {
+            height: 180px;
+            display: flex;
+            flex-direction: column;
+            background: var(--code-bg);
+            border-top: 1px solid var(--border-light);
+        }
+
+        .output-header {
+            padding: 10px 20px;
+            background: #252526;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid #333;
+        }
+
+        .output-header-title {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--code-text);
+        }
+
+        .output-content {
+            flex: 1;
+            padding: 12px 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--code-green);
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .output-content.error {
+            color: #f87171;
+        }
+
+        .output-content.muted {
+            color: #6b7280;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-medium);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Dark scrollbar for output */
+        .output-content::-webkit-scrollbar-thumb {
+            background: #4b5563;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="16 18 22 12 16 6"></polyline>
+                    <polyline points="8 6 2 12 8 18"></polyline>
+                </svg>
+            </div>
+            <h1>Blockly ⇔ Python</h1>
+        </div>
+        <div class="header-right">
+            <div class="lang-switch">
+                <button class="lang-btn active" id="langJa" onclick="switchLanguage('ja')">日本語</button>
+                <button class="lang-btn" id="langEn" onclick="switchLanguage('en')">English</button>
+            </div>
+            <span class="header-badge" id="badgeSync">双方向同期</span>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-icon blocks">🧩</div>
+                <span class="panel-title" id="titleBlocks">ブロックエディタ</span>
+                <div class="sync-indicator" id="blockIndicator">
+                    <span class="sync-dot"></span>
+                    <span id="blockMode">待機中</span>
+                </div>
+            </div>
+            <div id="blocklyDiv"></div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-icon code">🐍</div>
+                <span class="panel-title" id="titleCode">Pythonコード</span>
+                <div class="sync-indicator" id="codeIndicator">
+                    <span class="sync-dot"></span>
+                    <span id="codeMode">待機中</span>
+                </div>
+            </div>
+            <div class="editor-container">
+                <div class="code-wrapper">
+                    <div class="line-numbers" id="lineNumbers">1</div>
+                    <textarea id="codeEditor" placeholder="Pythonコードを入力してください..." spellcheck="false"></textarea>
+                </div>
+            </div>
+            <div class="toolbar">
+                <button class="btn btn-primary" id="btnRun" onclick="runPythonCode()">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    <span id="btnRunText">実行</span>
+                </button>
+                <button class="btn btn-secondary" id="btnClear" onclick="clearWorkspace()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <span id="btnClearText">クリア</span>
+                </button>
+                <div class="status-toast" id="status"></div>
+            </div>
+            <div class="output-panel">
+                <div class="output-header">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                    <span class="output-header-title" id="titleOutput">出力</span>
+                </div>
+                <div class="output-content" id="outputContent">ここに実行結果が表示されます</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 言語設定
+        let currentLang = 'ja';
+        
+        // i18n データ
+        const i18n = {
+            ja: {
+                titleBlocks: 'ブロックエディタ',
+                titleCode: 'Pythonコード',
+                titleOutput: '出力',
+                btnRun: '実行',
+                btnClear: 'クリア',
+                badgeSync: '双方向同期',
+                placeholder: 'Pythonコードを入力してください...',
+                waiting: '待機中',
+                syncing: '同期中',
+                typing: '入力中',
+                outputDefault: 'ここに実行結果が表示されます',
+                outputEmpty: '実行完了（出力なし）',
+                errorEmpty: 'エラー: コードが空です',
+                errorEngine: 'Python実行エンジンの読み込みに失敗しました。\nページを再読み込みしてください。',
+                errorPrefix: 'エラー:',
+                execError: '実行エラー:',
+                confirmClear: 'すべてのブロックとコードをクリアしますか？',
+                blockUpdated: 'ブロックを更新しました',
+                errorLabel: 'エラー: ',
+                // カスタムブロック
+                funcDef: '関数',
+                funcReturn: '戻り値',
+                funcDefTooltip: '関数を定義します',
+                funcCallTooltip: '関数を呼び出します（引数は最大3つ）',
+                funcCallReturnTooltip: '戻り値のある関数を呼び出します（引数は最大3つ）',
+                // ツールボックス
+                catLogic: '論理',
+                catLoops: 'ループ',
+                catMath: '数学',
+                catText: 'テキスト',
+                catVariables: '変数',
+                catFunctions: '関数'
+            },
+            en: {
+                titleBlocks: 'Block Editor',
+                titleCode: 'Python Code',
+                titleOutput: 'Output',
+                btnRun: 'Run',
+                btnClear: 'Clear',
+                badgeSync: 'Bidirectional Sync',
+                placeholder: 'Enter Python code...',
+                waiting: 'Ready',
+                syncing: 'Syncing',
+                typing: 'Typing',
+                outputDefault: 'Output will be displayed here',
+                outputEmpty: 'Execution complete (no output)',
+                errorEmpty: 'Error: Code is empty',
+                errorEngine: 'Failed to load Python engine.\nPlease reload the page.',
+                errorPrefix: 'Error:',
+                execError: 'Execution error:',
+                confirmClear: 'Clear all blocks and code?',
+                blockUpdated: 'Blocks updated',
+                errorLabel: 'Error: ',
+                // カスタムブロック
+                funcDef: 'function',
+                funcReturn: 'return',
+                funcDefTooltip: 'Define a function',
+                funcCallTooltip: 'Call a function (max 3 arguments)',
+                funcCallReturnTooltip: 'Call a function with return value (max 3 arguments)',
+                // ツールボックス
+                catLogic: 'Logic',
+                catLoops: 'Loops',
+                catMath: 'Math',
+                catText: 'Text',
+                catVariables: 'Variables',
+                catFunctions: 'Functions'
+            }
+        };
+        
+        // 翻訳関数
+        function t(key) {
+            return i18n[currentLang][key] || key;
+        }
+        
+        // UI更新関数
+        function updateUI() {
+            document.getElementById('titleBlocks').textContent = t('titleBlocks');
+            document.getElementById('titleCode').textContent = t('titleCode');
+            document.getElementById('titleOutput').textContent = t('titleOutput');
+            document.getElementById('btnRunText').textContent = t('btnRun');
+            document.getElementById('btnClearText').textContent = t('btnClear');
+            document.getElementById('badgeSync').textContent = t('badgeSync');
+            document.getElementById('codeEditor').placeholder = t('placeholder');
+            
+            // 待機中の表示を更新
+            if (document.getElementById('blockMode').textContent === i18n.ja.waiting || 
+                document.getElementById('blockMode').textContent === i18n.en.waiting) {
+                document.getElementById('blockMode').textContent = t('waiting');
+            }
+            if (document.getElementById('codeMode').textContent === i18n.ja.waiting || 
+                document.getElementById('codeMode').textContent === i18n.en.waiting) {
+                document.getElementById('codeMode').textContent = t('waiting');
+            }
+            
+            // 出力のデフォルトテキストを更新
+            const output = document.getElementById('outputContent');
+            if (output.textContent === i18n.ja.outputDefault || output.textContent === i18n.en.outputDefault) {
+                output.textContent = t('outputDefault');
+            }
+        }
+        
+        // ツールボックスを生成
+        function getToolbox() {
+            return `<xml>
+                <category name="${t('catLogic')}" colour="210">
+                    <block type="controls_if"></block>
+                    <block type="controls_if">
+                        <mutation else="1"></mutation>
+                    </block>
+                    <block type="logic_compare"></block>
+                    <block type="logic_operation"></block>
+                    <block type="logic_negate"></block>
+                    <block type="logic_boolean"></block>
+                </category>
+                <category name="${t('catLoops')}" colour="120">
+                    <block type="controls_repeat_ext">
+                        <value name="TIMES">
+                            <block type="math_number">
+                                <field name="NUM">10</field>
+                            </block>
+                        </value>
+                    </block>
+                    <block type="controls_whileUntil"></block>
+                    <block type="controls_for">
+                        <field name="VAR">i</field>
+                        <value name="FROM">
+                            <block type="math_number">
+                                <field name="NUM">0</field>
+                            </block>
+                        </value>
+                        <value name="TO">
+                            <block type="math_number">
+                                <field name="NUM">9</field>
+                            </block>
+                        </value>
+                        <value name="BY">
+                            <block type="math_number">
+                                <field name="NUM">1</field>
+                            </block>
+                        </value>
+                    </block>
+                    <block type="controls_flow_statements"></block>
+                </category>
+                <category name="${t('catMath')}" colour="230">
+                    <block type="math_number">
+                        <field name="NUM">0</field>
+                    </block>
+                    <block type="math_arithmetic"></block>
+                    <block type="math_modulo"></block>
+                </category>
+                <category name="${t('catText')}" colour="160">
+                    <block type="text"></block>
+                    <block type="text_print"></block>
+                    <block type="text_join"></block>
+                </category>
+                <category name="${t('catVariables')}" colour="330" custom="VARIABLE"></category>
+                <category name="${t('catFunctions')}" colour="290">
+                    <block type="custom_function_def"></block>
+                    <block type="custom_function_call"></block>
+                    <block type="custom_function_call_return"></block>
+                </category>
+            </xml>`;
+        }
+        
+        // 言語切り替え関数
+        function switchLanguage(lang) {
+            if (currentLang === lang) return;
+            
+            currentLang = lang;
+            
+            // ボタンのアクティブ状態を更新
+            document.getElementById('langJa').classList.toggle('active', lang === 'ja');
+            document.getElementById('langEn').classList.toggle('active', lang === 'en');
+            
+            // Blocklyの言語メッセージを読み込み
+            const script = document.createElement('script');
+            script.src = `https://cdnjs.cloudflare.com/ajax/libs/blockly/10.2.2/msg/${lang}.js`;
+            script.onload = function() {
+                // カスタムブロックを再定義
+                defineCustomBlocks();
+                
+                // ワークスペースを再作成
+                if (workspace) {
+                    const state = Blockly.serialization.workspaces.save(workspace);
+                    workspace.dispose();
+                    workspace = Blockly.inject('blocklyDiv', {
+                        toolbox: getToolbox(),
+                        grid: { spacing: 20, length: 3, colour: '#e5e5e5', snap: true },
+                        zoom: { controls: true, wheel: true, startScale: 1.0, maxScale: 3, minScale: 0.3, scaleSpeed: 1.2 },
+                        trashcan: true
+                    });
+                    workspace.addChangeListener(onBlocklyChange);
+                    Blockly.serialization.workspaces.load(state, workspace);
+                }
+                
+                // UIを更新
+                updateUI();
+            };
+            document.head.appendChild(script);
+        }
+        
+        // カスタムブロックの定義関数
+        function defineCustomBlocks() {
+            Blockly.Blocks['custom_function_def'] = {
+                init: function() {
+                    this.appendDummyInput()
+                        .appendField(t('funcDef'))
+                        .appendField(new Blockly.FieldTextInput("my_function"), "NAME")
+                        .appendField("(")
+                        .appendField(new Blockly.FieldTextInput(""), "PARAMS")
+                        .appendField("):");
+                    this.appendStatementInput("BODY")
+                        .setCheck(null);
+                    this.appendValueInput("RETURN")
+                        .setCheck(null)
+                        .appendField(t('funcReturn'));
+                    this.setColour(290);
+                    this.setPreviousStatement(true, null);
+                    this.setNextStatement(true, null);
+                    this.setTooltip(t('funcDefTooltip'));
+                }
+            };
+
+            Blockly.Blocks['custom_function_call'] = {
+                init: function() {
+                    this.appendDummyInput()
+                        .appendField(new Blockly.FieldTextInput("my_function"), "NAME")
+                        .appendField("(");
+                    this.appendValueInput("ARG0")
+                        .setCheck(null);
+                    this.appendValueInput("ARG1")
+                        .setCheck(null)
+                        .appendField(",");
+                    this.appendValueInput("ARG2")
+                        .setCheck(null)
+                        .appendField(",");
+                    this.appendDummyInput()
+                        .appendField(")");
+                    this.setPreviousStatement(true, null);
+                    this.setNextStatement(true, null);
+                    this.setColour(290);
+                    this.setTooltip(t('funcCallTooltip'));
+                }
+            };
+
+            Blockly.Blocks['custom_function_call_return'] = {
+                init: function() {
+                    this.appendDummyInput()
+                        .appendField(new Blockly.FieldTextInput("my_function"), "NAME")
+                        .appendField("(");
+                    this.appendValueInput("ARG0")
+                        .setCheck(null);
+                    this.appendValueInput("ARG1")
+                        .setCheck(null)
+                        .appendField(",");
+                    this.appendValueInput("ARG2")
+                        .setCheck(null)
+                        .appendField(",");
+                    this.appendDummyInput()
+                        .appendField(")");
+                    this.setOutput(true, null);
+                    this.setColour(290);
+                    this.setTooltip(t('funcCallReturnTooltip'));
+                }
+            };
+        }
+        
+        // 初期化時にカスタムブロックを定義
+        defineCustomBlocks();
+        
+        // カスタムブロックの定義（Blockly初期化前に実行）
+        Blockly.Blocks['custom_function_def'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("関数")
+                    .appendField(new Blockly.FieldTextInput("my_function"), "NAME")
+                    .appendField("(")
+                    .appendField(new Blockly.FieldTextInput(""), "PARAMS")
+                    .appendField("):");
+                this.appendStatementInput("BODY")
+                    .setCheck(null);
+                this.appendValueInput("RETURN")
+                    .setCheck(null)
+                    .appendField("戻り値");
+                this.setColour(290);
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setTooltip("関数を定義します");
+            }
+        };
+
+        Blockly.Python['custom_function_def'] = function(block) {
+            const name = block.getFieldValue('NAME');
+            const params = block.getFieldValue('PARAMS');
+            const body = Blockly.Python.statementToCode(block, 'BODY');
+            const returnValue = Blockly.Python.valueToCode(block, 'RETURN', Blockly.Python.ORDER_NONE);
+            
+            let code = 'def ' + name + '(' + params + '):\n';
+            if (body) {
+                code += body;
+            } else {
+                code += '  pass\n';
+            }
+            if (returnValue) {
+                code += '  return ' + returnValue + '\n';
+            }
+            return code;
+        };
+
+        Blockly.Blocks['custom_function_call'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField(new Blockly.FieldTextInput("my_function"), "NAME")
+                    .appendField("(");
+                this.appendValueInput("ARG0")
+                    .setCheck(null);
+                this.appendValueInput("ARG1")
+                    .setCheck(null)
+                    .appendField(",");
+                this.appendValueInput("ARG2")
+                    .setCheck(null)
+                    .appendField(",");
+                this.appendDummyInput()
+                    .appendField(")");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(290);
+                this.setTooltip("関数を呼び出します（引数は最大3つ）");
+            }
+        };
+
+        Blockly.Python['custom_function_call'] = function(block) {
+            const name = block.getFieldValue('NAME');
+            const args = [];
+            for (let i = 0; i < 3; i++) {
+                const arg = Blockly.Python.valueToCode(block, 'ARG' + i, Blockly.Python.ORDER_NONE);
+                if (arg) args.push(arg);
+            }
+            return name + '(' + args.join(', ') + ')\n';
+        };
+
+        Blockly.Blocks['custom_function_call_return'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField(new Blockly.FieldTextInput("my_function"), "NAME")
+                    .appendField("(");
+                this.appendValueInput("ARG0")
+                    .setCheck(null);
+                this.appendValueInput("ARG1")
+                    .setCheck(null)
+                    .appendField(",");
+                this.appendValueInput("ARG2")
+                    .setCheck(null)
+                    .appendField(",");
+                this.appendDummyInput()
+                    .appendField(")");
+                this.setOutput(true, null);
+                this.setColour(290);
+                this.setTooltip("戻り値のある関数を呼び出します（引数は最大3つ）");
+            }
+        };
+
+        Blockly.Python['custom_function_call_return'] = function(block) {
+            const name = block.getFieldValue('NAME');
+            const args = [];
+            for (let i = 0; i < 3; i++) {
+                const arg = Blockly.Python.valueToCode(block, 'ARG' + i, Blockly.Python.ORDER_NONE);
+                if (arg) args.push(arg);
+            }
+            return [name + '(' + args.join(', ') + ')', Blockly.Python.ORDER_FUNCTION_CALL];
+        };
+        
+        // 新しいAPI対応（forBlock使用）
+        if (Blockly.Python.forBlock) {
+            Blockly.Python.forBlock['custom_function_def'] = Blockly.Python['custom_function_def'];
+            Blockly.Python.forBlock['custom_function_call'] = Blockly.Python['custom_function_call'];
+            Blockly.Python.forBlock['custom_function_call_return'] = Blockly.Python['custom_function_call_return'];
+        }
+        
+        // controls_repeat_extのPythonコード生成をカスタマイズ（変数名をiに）
+        Blockly.Python['controls_repeat_ext'] = function(block) {
+            const repeats = Blockly.Python.valueToCode(block, 'TIMES', Blockly.Python.ORDER_NONE) || '0';
+            let branch = Blockly.Python.statementToCode(block, 'DO');
+            if (!branch) {
+                branch = '  pass\n';
+            }
+            const code = 'for i in range(' + repeats + '):\n' + branch;
+            return code;
+        };
+        
+        if (Blockly.Python.forBlock) {
+            Blockly.Python.forBlock['controls_repeat_ext'] = Blockly.Python['controls_repeat_ext'];
+        }
+        
+        // メイン処理
+        let workspace, codeEditorTimeout, lastUserCode = '', syncMode = 'none';
+        
+        Blockly.Python.addReservedWords('code');
+        const originalInit = Blockly.Python.init;
+        Blockly.Python.init = function(w) { originalInit.call(Blockly.Python, w); Blockly.Python.definitions_['variables'] = ''; };
+
+        function initBlockly() {
+            workspace = Blockly.inject('blocklyDiv', {
+                toolbox: getToolbox(),
+                grid: { spacing: 20, length: 3, colour: '#e5e5e5', snap: true },
+                zoom: { controls: true, wheel: true, startScale: 1.0, maxScale: 3, minScale: 0.3, scaleSpeed: 1.2 },
+                trashcan: true
+            });
+            workspace.addChangeListener(onBlocklyChange);
+            
+            const codeEditor = document.getElementById('codeEditor');
+            codeEditor.addEventListener('input', function() {
+                onCodeEditorChange();
+                updateLineNumbers();
+            });
+            codeEditor.addEventListener('scroll', syncLineNumbersScroll);
+            codeEditor.addEventListener('keydown', handleTabKey);
+            codeEditor.addEventListener('keydown', handleEnterKey);
+            
+            const xml = Blockly.utils.xml.textToDom('<xml><block type="text_print" x="50" y="50"><value name="TEXT"><block type="text"><field name="TEXT">Hello, World!</field></block></value></block></xml>');
+            Blockly.Xml.domToWorkspace(xml, workspace);
+            syncMode = 'block-to-code'; updateCodeFromBlocks(); syncMode = 'none';
+            updateLineNumbers();
+        }
+        
+        function updateLineNumbers() {
+            const editor = document.getElementById('codeEditor');
+            const lineNumbers = document.getElementById('lineNumbers');
+            const lineCount = (editor.value.match(/\n/g) || []).length + 1;
+            
+            const numbers = [];
+            for (let i = 1; i <= lineCount; i++) {
+                numbers.push(i);
+            }
+            lineNumbers.textContent = numbers.join('\n');
+        }
+        
+        function syncLineNumbersScroll() {
+            const editor = document.getElementById('codeEditor');
+            const lineNumbers = document.getElementById('lineNumbers');
+            lineNumbers.scrollTop = editor.scrollTop;
+        }
+        
+        function handleEnterKey(e) {
+            if (e.key === 'Enter') {
+                const editor = e.target;
+                const start = editor.selectionStart;
+                const value = editor.value;
+                
+                const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+                const currentLine = value.substring(lineStart, start);
+                
+                const indentMatch = currentLine.match(/^(\t*)/);
+                const currentIndent = indentMatch ? indentMatch[1] : '';
+                
+                const needsExtraIndent = currentLine.trim().endsWith(':');
+                
+                setTimeout(() => {
+                    const newStart = editor.selectionStart;
+                    const newValue = editor.value;
+                    
+                    if (needsExtraIndent) {
+                        const indent = currentIndent + '\t';
+                        editor.value = newValue.substring(0, newStart) + indent + newValue.substring(newStart);
+                        editor.selectionStart = editor.selectionEnd = newStart + indent.length;
+                    } else {
+                        editor.value = newValue.substring(0, newStart) + currentIndent + newValue.substring(newStart);
+                        editor.selectionStart = editor.selectionEnd = newStart + currentIndent.length;
+                    }
+                    
+                    updateLineNumbers();
+                    onCodeEditorChange();
+                }, 0);
+            }
+        }
+        
+        function handleTabKey(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const editor = e.target;
+                const start = editor.selectionStart;
+                const end = editor.selectionEnd;
+                const value = editor.value;
+                
+                if (e.shiftKey) {
+                    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+                    const lineEnd = value.indexOf('\n', end);
+                    const selectedLines = value.substring(lineStart, lineEnd === -1 ? value.length : lineEnd);
+                    
+                    if (start !== end) {
+                        const lines = selectedLines.split('\n');
+                        const newLines = lines.map(line => {
+                            if (line.startsWith('\t')) return line.substring(1);
+                            return line;
+                        });
+                        editor.value = value.substring(0, lineStart) + newLines.join('\n') + value.substring(lineEnd === -1 ? value.length : lineEnd);
+                        editor.selectionStart = lineStart;
+                        editor.selectionEnd = lineStart + newLines.join('\n').length;
+                    } else {
+                        if (value.substring(lineStart, lineStart + 1) === '\t') {
+                            editor.value = value.substring(0, lineStart) + value.substring(lineStart + 1);
+                            editor.selectionStart = editor.selectionEnd = start - 1;
+                        }
+                    }
+                } else {
+                    if (start !== end) {
+                        const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+                        const lineEnd = value.indexOf('\n', end);
+                        const selectedLines = value.substring(lineStart, lineEnd === -1 ? value.length : lineEnd);
+                        const lines = selectedLines.split('\n');
+                        const newLines = lines.map(line => '\t' + line);
+                        editor.value = value.substring(0, lineStart) + newLines.join('\n') + value.substring(lineEnd === -1 ? value.length : lineEnd);
+                        editor.selectionStart = lineStart;
+                        editor.selectionEnd = lineStart + newLines.join('\n').length;
+                    } else {
+                        editor.value = value.substring(0, start) + '\t' + value.substring(end);
+                        editor.selectionStart = editor.selectionEnd = start + 1;
+                    }
+                }
+                
+                updateLineNumbers();
+                onCodeEditorChange();
+            }
+        }
+
+        function onBlocklyChange(e) {
+            if (syncMode === 'code-to-block' || e.type === Blockly.Events.UI) return;
+            if (e.type === Blockly.Events.BLOCK_MOVE || e.type === Blockly.Events.BLOCK_CHANGE || e.type === Blockly.Events.BLOCK_CREATE || e.type === Blockly.Events.BLOCK_DELETE) {
+                syncMode = 'block-to-code'; 
+                updateModeDisplay('blockIndicator', 'blockMode', t('syncing'), true); 
+                updateCodeFromBlocks();
+                setTimeout(() => { 
+                    syncMode = 'none'; 
+                    updateModeDisplay('blockIndicator', 'blockMode', t('waiting'), false); 
+                }, 100);
+            }
+        }
+
+        function onCodeEditorChange() {
+            if (syncMode === 'block-to-code') return;
+            const c = document.getElementById('codeEditor').value;
+            clearTimeout(codeEditorTimeout); 
+            updateModeDisplay('codeIndicator', 'codeMode', t('typing'), true);
+            codeEditorTimeout = setTimeout(() => {
+                if (c !== lastUserCode) {
+                    syncMode = 'code-to-block'; 
+                    updateModeDisplay('codeIndicator', 'codeMode', t('syncing'), true); 
+                    applyCodeToBlocks(); 
+                    lastUserCode = c;
+                    setTimeout(() => { 
+                        syncMode = 'none'; 
+                        updateModeDisplay('codeIndicator', 'codeMode', t('waiting'), false); 
+                    }, 100);
+                }
+            }, 1000);
+        }
+
+        function updateCodeFromBlocks() {
+            let code = Blockly.Python.workspaceToCode(workspace);
+            // 変数のNone初期化を削除
+            code = code.split('\n').filter(l => !l.trim().match(/^\w+\s*=\s*None$/)).join('\n');
+            // 連続した空行を削除（最大1つの空行を許可）
+            code = code.replace(/\n{3,}/g, '\n\n');
+            // 先頭と末尾の空行を削除
+            code = code.trim();
+            document.getElementById('codeEditor').value = code; 
+            lastUserCode = code;
+            updateLineNumbers();
+        }
+
+        function applyCodeToBlocks() {
+            try {
+                Blockly.Events.setGroup(true); workspace.clear(); parseCode(document.getElementById('codeEditor').value);
+                Blockly.Events.setGroup(false); showStatus(t('blockUpdated'), false);
+            } catch (e) { showStatus(t('errorLabel') + e.message, true); Blockly.Events.setGroup(false); }
+        }
+
+        function parseCode(code) {
+            const lines = code.split('\n'); 
+            let yPos = 50, stack = [];
+            let lastTopBlock = null; // トップレベルブロックの連結用
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i], t = line.trim(), ind = line.search(/\S/);
+                if (!t || t.startsWith('#') || ind === -1) continue;
+                while (stack.length > 0 && ind <= stack[stack.length - 1].indent) stack.pop();
+                const parent = stack.length > 0 ? stack[stack.length - 1] : null;
+                let b = null;
+                
+                // def文
+                if (t.startsWith('def ')) {
+                    const m = t.match(/^def\s+(\w+)\((.*?)\):$/);
+                    if (m) {
+                        const hasReturn = checkForReturn(lines, i, ind);
+                        b = makeCustomFunctionDef(m[1], m[2], hasReturn);
+                        yPos += 120;
+                        stack.push({ block: b, indent: ind, stmt: 'BODY', last: null, isFunc: true, hasReturn: hasReturn });
+                    }
+                }
+                // return文
+                else if (t.startsWith('return ')) {
+                    const m = t.match(/^return\s+(.+)$/);
+                    if (m && parent?.isFunc && parent.hasReturn) {
+                        const v = makeValue(m[1]);
+                        if (v) {
+                            const inp = parent.block.getInput('RETURN');
+                            if (inp?.connection) inp.connection.connect(v.outputConnection);
+                        }
+                        continue;
+                    }
+                }
+                else if (t === 'return') {
+                    if (parent?.isFunc) continue;
+                }
+                // print文
+                else if (t.startsWith('print(')) { 
+                    const m = t.match(/^print\((.+)\)$/);
+                    if (m) { 
+                        const content = m[1];
+                        const args = splitPrintArgs(content);
+                        if (args.length === 1) {
+                            b = makePrint(args[0]);
+                        } else {
+                            b = makePrintMultiple(args);
+                        }
+                        yPos += 80; 
+                    }
+                }
+                // 変数代入（関数呼び出しを含む）
+                else if (t.match(/^\w+\s*=\s*\w+\([^)]*\)$/)) {
+                    const m = t.match(/^(\w+)\s*=\s*(\w+)\(([^)]*)\)$/);
+                    if (m && m[2] !== 'input' && m[2] !== 'range') {
+                        b = makeVarSetWithCustomFuncCall(m[1], m[2], m[3]); yPos += 80;
+                    }
+                }
+                // 関数呼び出し（単独）
+                else if (t.match(/^\w+\([^)]*\)$/)) {
+                    const m = t.match(/^(\w+)\(([^)]*)\)$/);
+                    if (m && m[1] !== 'print' && m[1] !== 'range' && m[1] !== 'input') {
+                        b = makeCustomFuncCall(m[1], m[2]); yPos += 80;
+                    }
+                }
+                // for文（range with 2 or 3 args）
+                else if (t.match(/^for\s+\w+\s+in\s+range\(/)) {
+                    const m = t.match(/^for\s+(\w+)\s+in\s+range\(([^)]+)\):/);
+                    if (m) {
+                        const varName = m[1];
+                        const rangeArgs = m[2].split(',').map(a => a.trim());
+                        getVar(varName);
+                        
+                        if (rangeArgs.length === 1) {
+                            b = makeRepeat(rangeArgs[0]);
+                        } else if (rangeArgs.length === 2) {
+                            b = makeForRange(rangeArgs[0], rangeArgs[1], varName);
+                        } else if (rangeArgs.length === 3) {
+                            b = makeForRangeWithStep(rangeArgs[0], rangeArgs[1], rangeArgs[2], varName);
+                        }
+                        
+                        if (b) {
+                            yPos += 120;
+                            stack.push({ block: b, indent: ind, stmt: 'DO', last: null });
+                        }
+                    }
+                }
+                // while文
+                else if (t.startsWith('while ')) { 
+                    const m = t.match(/^while\s+(.+):$/); 
+                    if (m) { b = makeWhile(m[1]); yPos += 120; stack.push({ block: b, indent: ind, stmt: 'DO', last: null }); } 
+                }
+                // if文
+                else if (t.startsWith('if ')) { 
+                    const m = t.match(/^if\s+(.+):$/); 
+                    if (m) { b = makeIf(m[1]); yPos += 120; stack.push({ block: b, indent: ind, stmt: 'DO0', last: null, ifBlock: b }); } 
+                }
+                // elif文
+                else if (t.startsWith('elif ')) { 
+                    const m = t.match(/^elif\s+(.+):$/); 
+                    if (m) { b = makeIf(m[1]); yPos += 120; stack.push({ block: b, indent: ind, stmt: 'DO0', last: null, ifBlock: b }); } 
+                }
+                // else文
+                else if (t === 'else:') { 
+                    if (parent?.ifBlock) { parent.ifBlock.elseCount_ = 1; if (parent.ifBlock.updateShape_) parent.ifBlock.updateShape_(); parent.stmt = 'ELSE'; parent.last = null; }
+                    continue;
+                }
+                // break
+                else if (t === 'break') { b = makeFlow('BREAK'); yPos += 60; }
+                // continue
+                else if (t === 'continue') { b = makeFlow('CONTINUE'); yPos += 60; }
+                // 複合代入演算子
+                else if (t.match(/^\w+\s*[+\-*/]=\s*.+$/)) {
+                    const m = t.match(/^(\w+)\s*([+\-*/])=\s*(.+)$/);
+                    if (m) { b = makeVarSet(m[1], m[1] + ' ' + m[2] + ' ' + m[3]); yPos += 80; }
+                }
+                // 通常の変数代入
+                else if (t.includes('=') && !t.includes('==') && !t.includes('!=') && !t.includes('<=') && !t.includes('>=')) {
+                    const eq = t.indexOf('=');
+                    const vn = t.substring(0, eq).trim(), val = t.substring(eq + 1).trim();
+                    if (vn && val) { b = makeVarSet(vn, val); yPos += 80; }
+                }
+                
+                if (b) {
+                    if (parent) {
+                        // ネストされたブロック
+                        attach(b, parent, yPos);
+                    } else {
+                        // トップレベルブロック - 前のブロックに連結
+                        if (lastTopBlock && lastTopBlock.nextConnection && b.previousConnection) {
+                            lastTopBlock.nextConnection.connect(b.previousConnection);
+                        } else {
+                            b.moveBy(50, 50);
+                        }
+                        lastTopBlock = b;
+                    }
+                }
+            }
+        }
+        
+        function checkForReturn(lines, start, funcInd) {
+            for (let i = start + 1; i < lines.length; i++) {
+                const t = lines[i].trim(), ind = lines[i].search(/\S/);
+                if (!t || t.startsWith('#') || ind === -1) continue;
+                if (ind <= funcInd) break;
+                if (t.startsWith('return ')) return true;
+            }
+            return false;
+        }
+        
+        function makeCustomFunctionDef(name, params, hasReturn) {
+            const b = workspace.newBlock('custom_function_def');
+            b.setFieldValue(name, 'NAME');
+            b.setFieldValue(params, 'PARAMS');
+            
+            if (!hasReturn) {
+                b.removeInput('RETURN');
+            }
+            
+            b.initSvg(); 
+            b.render(); 
+            return b;
+        }
+        
+        function makeCustomFuncCall(name, args) {
+            const b = workspace.newBlock('custom_function_call');
+            b.setFieldValue(name, 'NAME');
+            
+            if (args && args.trim()) {
+                const argList = args.split(',').map(a => a.trim()).filter(a => a);
+                argList.forEach((arg, idx) => {
+                    if (idx < 3) {
+                        const inp = b.getInput('ARG' + idx);
+                        if (inp?.connection) {
+                            const v = makeValue(arg);
+                            if (v) {
+                                inp.connection.connect(v.outputConnection);
+                            }
+                        }
+                    }
+                });
+            }
+            
+            b.initSvg(); 
+            b.render(); 
+            return b;
+        }
+        
+        function makeVarSetWithCustomFuncCall(varName, funcName, args) {
+            const v = getVar(varName);
+            const b = workspace.newBlock('variables_set');
+            if (v) b.getField('VAR').setValue(v.getId());
+            
+            const callBlock = workspace.newBlock('custom_function_call_return');
+            callBlock.setFieldValue(funcName, 'NAME');
+            
+            if (args && args.trim()) {
+                const argList = args.split(',').map(a => a.trim()).filter(a => a);
+                argList.forEach((arg, idx) => {
+                    if (idx < 3) {
+                        const inp = callBlock.getInput('ARG' + idx);
+                        if (inp?.connection) {
+                            const v = makeValue(arg);
+                            if (v) {
+                                inp.connection.connect(v.outputConnection);
+                            }
+                        }
+                    }
+                });
+            }
+            
+            callBlock.initSvg();
+            callBlock.render();
+            
+            const inp = b.getInput('VALUE');
+            if (inp?.connection) inp.connection.connect(callBlock.outputConnection);
+            
+            b.initSvg();
+            b.render();
+            return b;
+        }
+
+        function makePrint(content) {
+            const b = workspace.newBlock('text_print'), v = makeValue(content);
+            if (v) { const inp = b.getInput('TEXT'); if (inp?.connection) inp.connection.connect(v.outputConnection); }
+            b.initSvg(); b.render(); return b;
+        }
+        
+        function makePrintMultiple(args) {
+            const b = workspace.newBlock('text_print');
+            
+            const joinBlock = workspace.newBlock('text_join');
+            joinBlock.itemCount_ = args.length;
+            if (joinBlock.updateShape_) {
+                joinBlock.updateShape_();
+            }
+            joinBlock.initSvg();
+            joinBlock.render();
+            
+            args.forEach((arg, idx) => {
+                const v = makeValue(arg.trim());
+                if (v) {
+                    const inp = joinBlock.getInput('ADD' + idx);
+                    if (inp?.connection) {
+                        inp.connection.connect(v.outputConnection);
+                    }
+                }
+            });
+            
+            const inp = b.getInput('TEXT');
+            if (inp?.connection) {
+                inp.connection.connect(joinBlock.outputConnection);
+            }
+            
+            b.initSvg();
+            b.render();
+            return b;
+        }
+        
+        function splitPrintArgs(str) {
+            const args = [];
+            let current = '';
+            let depth = 0;
+            let inString = false;
+            let stringChar = '';
+            
+            for (let i = 0; i < str.length; i++) {
+                const char = str[i];
+                
+                if ((char === '"' || char === "'") && (i === 0 || str[i-1] !== '\\')) {
+                    if (!inString) {
+                        inString = true;
+                        stringChar = char;
+                    } else if (char === stringChar) {
+                        inString = false;
+                    }
+                }
+                
+                if (!inString) {
+                    if (char === '(') depth++;
+                    else if (char === ')') depth--;
+                    else if (char === ',' && depth === 0) {
+                        args.push(current.trim());
+                        current = '';
+                        continue;
+                    }
+                }
+                
+                current += char;
+            }
+            
+            if (current.trim()) {
+                args.push(current.trim());
+            }
+            
+            return args;
+        }
+
+        function makeRepeat(count) {
+            const b = workspace.newBlock('controls_repeat_ext'), n = workspace.newBlock('math_number');
+            n.setFieldValue(count, 'NUM'); n.initSvg(); n.render();
+            const inp = b.getInput('TIMES'); if (inp?.connection) inp.connection.connect(n.outputConnection);
+            b.initSvg(); b.render(); return b;
+        }
+        
+        function makeForRange(start, end, varName) {
+            const b = workspace.newBlock('controls_for');
+            const varModel = getVar(varName);
+            if (varModel) b.getField('VAR').setValue(varModel.getId());
+            
+            const startBlock = workspace.newBlock('math_number');
+            startBlock.setFieldValue(start, 'NUM');
+            startBlock.initSvg(); startBlock.render();
+            
+            const endBlock = workspace.newBlock('math_number');
+            endBlock.setFieldValue((parseInt(end) - 1).toString(), 'NUM');
+            endBlock.initSvg(); endBlock.render();
+            
+            const stepBlock = workspace.newBlock('math_number');
+            stepBlock.setFieldValue('1', 'NUM');
+            stepBlock.initSvg(); stepBlock.render();
+            
+            const fromInp = b.getInput('FROM');
+            if (fromInp?.connection) fromInp.connection.connect(startBlock.outputConnection);
+            
+            const toInp = b.getInput('TO');
+            if (toInp?.connection) toInp.connection.connect(endBlock.outputConnection);
+            
+            const byInp = b.getInput('BY');
+            if (byInp?.connection) byInp.connection.connect(stepBlock.outputConnection);
+            
+            b.initSvg(); b.render(); return b;
+        }
+        
+        function makeForRangeWithStep(start, end, step, varName) {
+            const b = workspace.newBlock('controls_for');
+            const varModel = getVar(varName);
+            if (varModel) b.getField('VAR').setValue(varModel.getId());
+            
+            const startBlock = workspace.newBlock('math_number');
+            startBlock.setFieldValue(start, 'NUM');
+            startBlock.initSvg(); startBlock.render();
+            
+            const endBlock = workspace.newBlock('math_number');
+            endBlock.setFieldValue((parseInt(end) - 1).toString(), 'NUM');
+            endBlock.initSvg(); endBlock.render();
+            
+            const stepBlock = workspace.newBlock('math_number');
+            stepBlock.setFieldValue(step, 'NUM');
+            stepBlock.initSvg(); stepBlock.render();
+            
+            const fromInp = b.getInput('FROM');
+            if (fromInp?.connection) fromInp.connection.connect(startBlock.outputConnection);
+            
+            const toInp = b.getInput('TO');
+            if (toInp?.connection) toInp.connection.connect(endBlock.outputConnection);
+            
+            const byInp = b.getInput('BY');
+            if (byInp?.connection) byInp.connection.connect(stepBlock.outputConnection);
+            
+            b.initSvg(); b.render(); return b;
+        }
+
+        function makeWhile(cond) {
+            const b = workspace.newBlock('controls_whileUntil'); b.setFieldValue('WHILE', 'MODE');
+            const c = parseCond(cond); if (c) { const inp = b.getInput('BOOL'); if (inp?.connection) inp.connection.connect(c.outputConnection); }
+            b.initSvg(); b.render(); return b;
+        }
+
+        function makeIf(cond) {
+            const b = workspace.newBlock('controls_if'), c = parseCond(cond);
+            if (c) { const inp = b.getInput('IF0'); if (inp?.connection) inp.connection.connect(c.outputConnection); }
+            b.initSvg(); b.render(); return b;
+        }
+
+        function makeFlow(type) {
+            const b = workspace.newBlock('controls_flow_statements'); b.setFieldValue(type, 'FLOW');
+            b.initSvg(); b.render(); return b;
+        }
+
+        function makeVarSet(name, val) {
+            const v = getVar(name), b = workspace.newBlock('variables_set');
+            if (v) b.getField('VAR').setValue(v.getId());
+            const vb = makeValue(val); if (vb) { const inp = b.getInput('VALUE'); if (inp?.connection) inp.connection.connect(vb.outputConnection); }
+            b.initSvg(); b.render(); return b;
+        }
+
+        function makeValue(v) {
+            v = v?.trim(); if (!v) return null; let b = null;
+            if (v.startsWith('(') && v.endsWith(')')) return makeValue(v.substring(1, v.length - 1));
+            
+            // str(変数)の処理 - 変数として扱う
+            const strMatch = v.match(/^str\((\w+)\)$/);
+            if (strMatch) {
+                const varName = strMatch[1];
+                const vr = getVar(varName);
+                b = workspace.newBlock('variables_get');
+                if (vr) b.getField('VAR').setValue(vr.getId());
+                b.initSvg(); b.render();
+                return b;
+            }
+            
+            if (v.match(/^['"](.*)['"]$/)) { b = workspace.newBlock('text'); b.setFieldValue(v.replace(/^['"]|['"]$/g, ''), 'TEXT'); }
+            else if (!isNaN(v) && v !== '') { b = workspace.newBlock('math_number'); b.setFieldValue(v, 'NUM'); }
+            else if (v === 'True' || v === 'False') { b = workspace.newBlock('logic_boolean'); b.setFieldValue(v.toUpperCase(), 'BOOL'); }
+            else if (v.match(/(.+?)\s*\*\*\s*(.+)/)) { b = makeMath(v.match(/(.+?)\s*\*\*\s*(.+)/), 'POWER'); }
+            else if (v.match(/(.+?)\s*([*\/%])\s*(.+)/)) { const m = v.match(/(.+?)\s*([*\/%])\s*(.+)/); b = makeMath(m, { '*': 'MULTIPLY', '/': 'DIVIDE', '%': 'MODULO' }[m[2]]); }
+            else if (v.match(/(.+?)\s*([+\-])\s*(.+)/)) { const m = v.match(/(.+?)\s*([+\-])\s*(.+)/); b = makeTextJoinOrMath(v); }
+            else if (v.match(/^\w+$/)) { const vr = getVar(v); b = workspace.newBlock('variables_get'); if (vr) b.getField('VAR').setValue(vr.getId()); }
+            if (b) { b.initSvg(); b.render(); } return b;
+        }
+        
+        // str()を含む+演算をtext_joinとして処理するか、数値演算として処理するか判断
+        function makeTextJoinOrMath(v) {
+            // str()が含まれている場合はtext_joinとして処理
+            if (v.includes('str(')) {
+                const parts = splitByPlus(v);
+                if (parts.length > 1) {
+                    const joinBlock = workspace.newBlock('text_join');
+                    joinBlock.itemCount_ = parts.length;
+                    if (joinBlock.updateShape_) {
+                        joinBlock.updateShape_();
+                    }
+                    joinBlock.initSvg();
+                    joinBlock.render();
+                    
+                    parts.forEach((part, idx) => {
+                        const valueBlock = makeValue(part.trim());
+                        if (valueBlock) {
+                            const inp = joinBlock.getInput('ADD' + idx);
+                            if (inp?.connection) {
+                                inp.connection.connect(valueBlock.outputConnection);
+                            }
+                        }
+                    });
+                    
+                    return joinBlock;
+                }
+            }
+            
+            // 通常の数学演算
+            const m = v.match(/(.+?)\s*([+\-])\s*(.+)/);
+            if (m) {
+                return makeMath(m, { '+': 'ADD', '-': 'MINUS' }[m[2]]);
+            }
+            return null;
+        }
+        
+        // +演算子で分割（括弧内の+は無視）
+        function splitByPlus(str) {
+            const parts = [];
+            let current = '';
+            let depth = 0;
+            
+            for (let i = 0; i < str.length; i++) {
+                const char = str[i];
+                if (char === '(') depth++;
+                else if (char === ')') depth--;
+                else if (char === '+' && depth === 0) {
+                    parts.push(current.trim());
+                    current = '';
+                    continue;
+                }
+                current += char;
+            }
+            if (current.trim()) parts.push(current.trim());
+            return parts;
+        }
+
+        function makeMath(m, op) {
+            const b = workspace.newBlock('math_arithmetic'); b.setFieldValue(op, 'OP');
+            const l = makeValue(m[1]), r = makeValue(m[3]);
+            if (l) { const a = b.getInput('A'); if (a?.connection) a.connection.connect(l.outputConnection); }
+            if (r) { const bInp = b.getInput('B'); if (bInp?.connection) bInp.connection.connect(r.outputConnection); }
+            return b;
+        }
+
+        function parseCond(c) {
+            c = c.trim();
+            if (c === 'True' || c === 'False') { const b = workspace.newBlock('logic_boolean'); b.setFieldValue(c.toUpperCase(), 'BOOL'); b.initSvg(); b.render(); return b; }
+            if (c.startsWith('not ')) { const b = workspace.newBlock('logic_negate'), inner = parseCond(c.substring(4)); if (inner) { const inp = b.getInput('BOOL'); if (inp?.connection) inp.connection.connect(inner.outputConnection); } b.initSvg(); b.render(); return b; }
+            if (c.includes(' and ')) { const p = c.split(' and '), b = workspace.newBlock('logic_operation'); b.setFieldValue('AND', 'OP'); const l = parseCond(p[0]), r = parseCond(p.slice(1).join(' and ')); if (l) { const a = b.getInput('A'); if (a?.connection) a.connection.connect(l.outputConnection); } if (r) { const bInp = b.getInput('B'); if (bInp?.connection) bInp.connection.connect(r.outputConnection); } b.initSvg(); b.render(); return b; }
+            if (c.includes(' or ')) { const p = c.split(' or '), b = workspace.newBlock('logic_operation'); b.setFieldValue('OR', 'OP'); const l = parseCond(p[0]), r = parseCond(p.slice(1).join(' or ')); if (l) { const a = b.getInput('A'); if (a?.connection) a.connection.connect(l.outputConnection); } if (r) { const bInp = b.getInput('B'); if (bInp?.connection) bInp.connection.connect(r.outputConnection); } b.initSvg(); b.render(); return b; }
+            const m = c.match(/(.+?)\s*([<>=!]+)\s*(.+)/);
+            if (m) { const op = { '==': 'EQ', '!=': 'NEQ', '<': 'LT', '<=': 'LTE', '>': 'GT', '>=': 'GTE' }[m[2]], b = workspace.newBlock('logic_compare'); b.setFieldValue(op || 'EQ', 'OP'); const l = makeValue(m[1]), r = makeValue(m[3]); if (l) { const a = b.getInput('A'); if (a?.connection) a.connection.connect(l.outputConnection); } if (r) { const bInp = b.getInput('B'); if (bInp?.connection) bInp.connection.connect(r.outputConnection); } b.initSvg(); b.render(); return b; }
+            return null;
+        }
+
+        function attach(b, p, y) {
+            if (p) {
+                const inp = p.block.getInput(p.stmt);
+                if (inp?.connection) { if (p.last?.nextConnection) p.last.nextConnection.connect(b.previousConnection); else inp.connection.connect(b.previousConnection); }
+                p.last = b;
+            } else b.moveBy(50, y);
+        }
+
+        function getVar(n) { let v = workspace.getVariable(n); if (!v) v = workspace.createVariable(n); return v; }
+        
+        function updateModeDisplay(indicatorId, modeId, txt, active) { 
+            const indicator = document.getElementById(indicatorId);
+            const mode = document.getElementById(modeId);
+            mode.textContent = txt;
+            if (active) {
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+        
+        function showStatus(msg, isError) { 
+            const s = document.getElementById('status'); 
+            s.textContent = msg; 
+            s.className = 'status-toast visible ' + (isError ? 'error' : 'success');
+            setTimeout(() => {
+                s.classList.remove('visible');
+            }, 3000); 
+        }
+        
+        function clearWorkspace() { 
+            if (confirm(t('confirmClear'))) { 
+                syncMode = 'block-to-code'; 
+                workspace.clear(); 
+                document.getElementById('codeEditor').value = ''; 
+                lastUserCode = ''; 
+                updateLineNumbers();
+                setTimeout(() => { 
+                    syncMode = 'none'; 
+                    updateModeDisplay('blockIndicator', 'blockMode', t('waiting'), false); 
+                    updateModeDisplay('codeIndicator', 'codeMode', t('waiting'), false); 
+                }, 100); 
+            } 
+        }
+        
+        function runPythonCode() {
+            const code = document.getElementById('codeEditor').value;
+            const output = document.getElementById('outputContent');
+            output.textContent = '';
+            output.className = 'output-content';
+            
+            if (!code.trim()) {
+                output.textContent = t('errorEmpty');
+                output.className = 'output-content error';
+                return;
+            }
+            
+            if (typeof Sk === 'undefined') {
+                output.textContent = t('errorEngine');
+                output.className = 'output-content error';
+                return;
+            }
+            
+            try {
+                Sk.configure({
+                    output: function(text) {
+                        output.textContent += text;
+                    },
+                    read: function(x) {
+                        if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined)
+                            throw "File not found: '" + x + "'";
+                        return Sk.builtinFiles["files"][x];
+                    },
+                    __future__: Sk.python3
+                });
+                
+                const myPromise = Sk.misceval.asyncToPromise(function() {
+                    return Sk.importMainWithBody("<stdin>", false, code, true);
+                });
+                
+                myPromise.then(
+                    function(mod) {
+                        if (output.textContent === '') {
+                            output.textContent = t('outputEmpty');
+                            output.className = 'output-content muted';
+                        }
+                    },
+                    function(err) {
+                        output.textContent = t('errorPrefix') + '\n' + err.toString();
+                        output.className = 'output-content error';
+                    }
+                );
+            } catch (e) {
+                output.textContent = t('execError') + '\n' + e.toString();
+                output.className = 'output-content error';
+            }
+        }
+        
+        window.addEventListener('load', initBlockly);
+    </script>
+</body>
+</html>
